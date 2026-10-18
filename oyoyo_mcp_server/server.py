@@ -58,4 +58,4 @@ def publish_to_n8n(store_name: str, product_name: str, social_copy: str, image_u
     return "Successfully sent to n8n" if response.status_code == 200 else "Failed to send to n8n"
 
 if __name__ == "__main__":
-    mcp.run(host="0.0.0.0", port=9000)
+    mcp.run(transport="sse", host="0.0.0.0", port=9000)
