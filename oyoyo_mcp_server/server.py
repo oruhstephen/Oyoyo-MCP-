@@ -10,6 +10,7 @@ mcp = FastMCP(
     "WooCommerce Multi-Store Engine",
     host="0.0.0.0",
     port=9000,
+    stateless_http=True,
 )
 
 stores = {
@@ -54,4 +55,4 @@ def publish_to_n8n(store_name: str, product_name: str, social_copy: str, image_u
     return "Successfully sent to n8n" if response.status_code == 200 else f"Failed: {response.status_code}"
 
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    mcp.run(transport="streamable-http")
