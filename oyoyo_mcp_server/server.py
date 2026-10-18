@@ -1,9 +1,10 @@
+import os
 import requests
 from mcp.server import Server
+import mcp.types as types
 from mcp.server.sse import SseServerTransport
 from starlette.applications import Starlette
 from starlette.routing import Route
-from starlette.responses import JSONResponse
 import uvicorn
 from woocommerce import API
 
@@ -32,14 +33,13 @@ def get_store_api(store_name: str) -> API:
         raise ValueError(f"Unknown store: {store_name}.")
     return stores[store_key]
 
-# Define Tools
 @mcp.list_tools()
-async def list_tools() -> list:
+async def handle_list_tools() -> list[types.Tool]:
     return [
-        {
-            "name": "get_product",
-            "description": "Fetches details for a single product from either Oyoyo or Creativeulo.",
-            "inputSchema": {
+        types.Tool(
+            name="get_product",
+            description="Fetches details for a single product from either Oyoyo or Creativeulo.",
+            inputSchema={
                 "type": "object",
                 "properties": {
                     "store_name": {"type": "string", "description": "The name of the store (oyoyo or creativeulo)"},
@@ -47,11 +47,11 @@ async def list_tools() -> list:
                 },
                 "required": ["store_name", "product_id"]
             }
-        },
-        {
-            "name": "publish_to_n8n",
-            "description": "Sends the generated social media content and images to n8n for publishing.",
-            "inputSchema": {
+        ),
+        types.Tool(
+            name="publish_to_n8n",
+            description="Sends the generated social media content and images to n8n for publishing.",
+            inputSchema={
                 "type": "object",
                 "properties": {
                     "store_name": {"type": "string"},
@@ -61,18 +61,17 @@ async def list_tools() -> list:
                 },
                 "required": ["store_name", "product_name", "social_copy", "image_urls"]
             }
-        }
+        )
     ]
 
 @mcp.call_tool()
-async def call_tool(name: str, arguments: dict) -> list:
+async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     if name == "get_product":
         wcapi = get_store_api(arguments["store_name"])
         response = wcapi.get(f"products/{arguments['product_id']}")
-        return [{"type": "text", "text": str(response.json())}]
+        return [types.TextContent(type="text", text=str(response.json()))]
         
     elif name == "publish_to_n8n":
-        # Your exact n8n webhook URL hardcoded
         n8n_webhook_url = "https://go90ng-n8n.eq7icp.easypanel.host/webhook/2e33cd0a-f0c8-41cd-8117-5221eebfbb92"
         payload = {
             "store": arguments["store_name"],
@@ -82,42 +81,25 @@ async def call_tool(name: str, arguments: dict) -> list:
         }
         response = requests.post(n8n_webhook_url, json=payload)
         status = "Successfully sent to n8n" if response.status_code == 200 else f"Failed: {response.status_code}"
-        return [{"type": "text", "text": status}]
+        return [types.TextContent(type="text", text=status)]
     
     raise ValueError(f"Unknown tool: {name}")
 
+# Configure SSE endpoints to handle both normal traffic and Gemini's POST probe
+sse = SseServerTransport("/messages")
 
-# Define the SSE Transport and Web Server
-sse_transport = None
+async def handle_sse(request):
+    async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+        await mcp.run(streams[0], streams[1], mcp.create_initialization_options())
 
-async def sse_handler(request):
-    global sse_transport
-    sse_transport = SseServerTransport("/messages")
-    return await sse_transport.handle_sse(request)
-
-async def messages_handler(request):
-    global sse_transport
-    if sse_transport is None:
-        return JSONResponse({"error": "No active SSE connection"}, status_code=400)
-    return await sse_transport.handle_post_message(request)
+async def handle_messages(request):
+    await sse.handle_post_message(request.scope, request.receive, request._send)
 
 app = Starlette(routes=[
-    Route("/sse", endpoint=sse_handler, methods=["GET", "HEAD"]),
-    Route("/messages", endpoint=messages_handler, methods=["POST"]),
+    Route("/sse", endpoint=handle_sse, methods=["GET", "HEAD"]),
+    Route("/messages", endpoint=handle_messages, methods=["POST"]),
+    Route("/sse", endpoint=handle_messages, methods=["POST"]) # Intercepts Gemini's 405 error check
 ])
 
 if __name__ == "__main__":
-    import asyncio
-    
-    async def start_mcp():
-        global sse_transport
-        while True:
-            if sse_transport:
-                await mcp.run(sse_transport, mcp.create_initialization_options())
-            await asyncio.sleep(0.1)
-
-    loop = asyncio.get_event_loop()
-    loop.create_task(start_mcp())
-    
-    # Run the web server on port 9000
     uvicorn.run(app, host="0.0.0.0", port=9000)
