@@ -1,3 +1,5 @@
 fastmcp
 woocommerce
 requests
+starlette
+uvicorn
