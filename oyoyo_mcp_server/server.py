@@ -8,13 +8,13 @@ mcp = FastMCP(name="WooCommerce Multi-Store Engine")
 # Initialize connections for both stores
 stores = {
     "oyoyo": API(
-        url=os.environ.get("https://www.oyoyo.app3.uk"),
+        url="https://www.oyoyo.app3.uk",
         consumer_key=os.environ.get("ck_bd738a7fc8676be2230820be9ed7ed6d06687505"),
         consumer_secret=os.environ.get("cs_66c70fe0c0763795c3ac8e5423a9d9bf1b4c95cf"),
         version="wc/v3"
     ),
     "creativeulo": API(
-        url=os.environ.get("https://www.creativeulo.app3.uk"),
+        url="https://www.creativeulo.app3.uk",
         consumer_key=os.environ.get("ck_e4a13a3ad0d5fd5bf465c1497a5676693c56e4b7"),
         consumer_secret=os.environ.get("cs_bd24237493af6e56e19a4235dbf69d3ed8135c05"),
         version="wc/v3"
